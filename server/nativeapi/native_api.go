@@ -49,6 +49,8 @@ func (api *Router) routes() http.Handler {
 		r.Use(server.UpdateLastAccessMiddleware(api.ds))
 		api.R(r, "/user", model.User{}, true)
 		api.R(r, "/song", model.MediaFile{}, false)
+		api.addSongCountRoute(r)
+		api.addSongListWithCountRoute(r)
 		api.R(r, "/album", model.Album{}, false)
 		api.R(r, "/artist", model.Artist{}, false)
 		api.R(r, "/genre", model.Genre{}, false)
@@ -158,6 +160,37 @@ func (api *Router) addPlaylistTrackRoute(r chi.Router) {
 func (api *Router) addSongPlaylistsRoute(r chi.Router) {
 	r.With(server.URLParamsMiddleware).Get("/song/{id}/playlists", func(w http.ResponseWriter, r *http.Request) {
 		getSongPlaylists(api.ds)(w, r)
+	})
+}
+
+func (api *Router) addSongCountRoute(r chi.Router) {
+	r.Get("/song/count", func(w http.ResponseWriter, r *http.Request) {
+		count, err := api.ds.MediaFile(r.Context()).CountAll()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_ = rest.RespondWithJSON(w, http.StatusOK, map[string]int64{"count": count})
+	})
+}
+
+func (api *Router) addSongListWithCountRoute(r chi.Router) {
+	r.Get("/song/full", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		items, err := api.ds.MediaFile(ctx).GetAll()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		count, err := api.ds.MediaFile(ctx).CountAll()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_ = rest.RespondWithJSON(w, http.StatusOK, struct {
+			Count int64            `json:"count"`
+			Items model.MediaFiles `json:"items"`
+		}{Count: count, Items: items})
 	})
 }
 
